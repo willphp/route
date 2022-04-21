@@ -75,6 +75,10 @@ route组件用于处理php框架路由
 	pathinfo: index.php/应用/控制器/方法/参数/值
 	get: index.php?s=应用/控制器/方法&参数=值
 
+####当前控制器
+
+	$controller = Route::getController(); //获取当前控制器
+
 ####当前操作
 
 	$action = Route::getAction(); //获取当前控制器方法
@@ -82,10 +86,6 @@ route组件用于处理php框架路由
 ####当前路由
 
 	$path = Route::getRoute(); //获取当前路由路径+get参数
-
-####模板文件
-
-	$file = Route::getViewFile(); //获取当前路由对应模板文件
 
 ####执行方法
 
