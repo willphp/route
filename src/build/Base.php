@@ -125,6 +125,13 @@ class Base {
 		return $pathinfo;
 	}
 	/**
+	 * 获取当前控制器
+	 * @return string
+	 */
+	public function getController() {
+		return $this->controller;
+	}
+	/**
 	 * 获取当前操作方法
 	 * @return string
 	 */
@@ -135,32 +142,20 @@ class Base {
 	 * 获取当前路由路径+get参数
 	 * @return string
 	 */
-	public function getRoute() {
-		if (!$this->route) {
-			$this->route = $this->module.'/'.$this->controller.'/'.$this->method;
-			$param = Request::get();
-			if (!empty($param)) {
-				ksort($param);
-				$this->route .= '?'.http_build_query($param);
-			}
+	public function getRoute($path = '') {
+		$route = $this->parseRoute($path);	
+		$this->route = $route['module'].'/'.$route['controller'].'/'.$route['method'];	
+		if (!empty($path)) {
+			$params = $route['params'];	
+		} else {
+			$params = array_merge(Request::get(), $route['params']);	
+		}
+		if (!empty($params)) {
+			ksort($params);
+			$this->route .= '?'.http_build_query($params);
 		}
 		return $this->route;
 	}
-	/**
-	 * 获取当前路由模板文件
-	 * @return string
-	 */
-	public function getViewFile($file = '') {
-		$path = $this->controller;
-		if ($file == '') {
-			$file = $this->method;
-		} elseif (strpos($file, ':')) {
-			list($path, $file) = explode(':', $file);
-		} elseif (strpos($file, '/')) {
-			$path = '';
-		}		
-		return trim($path.'/'.$file, '/').Config::get('view.prefix', '.html');	
-	}	
 	/**
 	 * 根据pathinfo获取匹配路由
 	 * @param string $path 
@@ -236,12 +231,39 @@ class Base {
 		return $parse;
 	}
 	/**
+	 * 获取视图缓存
+	 * @return string|false
+	 */
+	protected function viewCache() {
+		if (Config::get('view.view_cache')) {			
+			$cache = Request::get('_cache', -1, 'intval');
+			if ($cache >= 0) {
+				Request::setParam('_cache', null);		
+			}			
+			$route = $this->getRoute();
+			$cache_name = md5($route);				
+			if ($cache >= 0) {
+				Cache::driver('file')->dir(Config::get('view.cache_dir'))->del($cache_name);
+				$history = Request::history();
+				if ($history) {
+					header('location:'.$history);
+				}				
+			}			
+			return Cache::driver('file')->dir(Config::get('view.cache_dir'))->get($cache_name);			
+		}	
+		return false;
+	}	
+	/**
 	 * 执行控制器方法
 	 * @param string $route 路由
 	 * @param array $params 参数
 	 * @return mixed
 	 */
 	public function executeControllerMethod($route = '', $params = []) {
+		if (empty($route) && ($viewcache = $this->viewCache())) {
+			//页面缓存
+			return $viewcache;			
+		}		
 		$parse = $this->parseRoute($route);
 		$module = $parse['module'];
 		$controller = ucfirst($parse['controller']);
@@ -257,7 +279,7 @@ class Base {
 		}
 		if (!method_exists($class, $method)) {
 			throw new \Exception($controller.'Controller->'.$method.'() does not exist.');
-		}
+		}		
 		$class = Container::make($class, true);
 		try {
 			$class_method = new \ReflectionMethod($class, $method); //类方法
