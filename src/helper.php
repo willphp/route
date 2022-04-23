@@ -19,9 +19,6 @@ if (!function_exists('url')) {
 	 * @return string 返回生成url
 	 */
 	function url($route = '', $param = [], $suffix = '*') {
-		if (filter_var($route, FILTER_VALIDATE_URL) !== false) {
-			return $route;
-		}
 		return \willphp\route\Route::buildUrl($route, $param, $suffix);
 	}
 }
