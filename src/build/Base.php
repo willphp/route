@@ -235,7 +235,7 @@ class Base {
 	 * @return string|false
 	 */
 	protected function viewCache() {
-		if (Config::get('view.view_cache')) {			
+		if (IS_GET && Config::get('view.view_cache')) {			
 			$cache = Request::get('_cache', -1, 'intval');
 			if ($cache >= 0) {
 				Request::setParam('_cache', null);		
@@ -362,6 +362,15 @@ class Base {
 	 * @return string
 	 */
 	public function buildUrl($route = '', $param = [], $suffix = '*') {
+		if (is_null($route)) {
+			return '';
+		}
+		if ($route == '[back]' || $route == 'javascript:history.back(-1);') {
+			return 'javascript:history.back(-1);';
+		}
+		if (filter_var($route, FILTER_VALIDATE_URL) !== false) {
+			return $route;
+		}		
 		if (in_array($route, ['','@','@/','/@'])) {
 			$route = '/'; 
 		}
