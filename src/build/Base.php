@@ -272,10 +272,14 @@ class Base {
 		if (isset($params['req'])) {
 			unset($params['req']); //req为保留参数
 		}
+		//_为前缀的为私有方法，禁止路由直接访问
+		if (0 === strpos($method, '_')) {
+			$method = 'empty';
+		}		
 		$class = 'app\\'.$module.'\\controller\\'.$controller.'Controller';
 		if (empty($route) && !method_exists($class, $method)) {
 			$class = 'app\\'.$module.'\\controller\\EmptyController';
-			$method = '_empty';
+			$method = 'empty';
 		}
 		if (!method_exists($class, $method)) {
 			throw new \Exception($controller.'Controller->'.$method.'() does not exist.');
@@ -287,6 +291,7 @@ class Base {
 				throw new \Exception($controller.'Controller->'.$method.'()：The called method is not public.');
 			}
 			$bind = $extend = []; //绑定参数，扩展参数
+			$post = Request::post(); //post 参数
 			$method_args = $class_method->getParameters(); //方法属性
 			foreach ($method_args as $arg) {
 				$arg_name = $arg->getName(); //属性名称
@@ -298,12 +303,15 @@ class Base {
 					$bind[$arg_name] = Container::build($dependency->name);
 				} elseif ($arg->isDefaultValueAvailable()) {
 					$bind[$arg_name] = $arg->getDefaultValue();
+				} elseif (!$arg->isDefaultValueAvailable() && isset($post[$arg_name])) {
+					$bind[$arg_name] = $post[$arg_name];
 				} elseif ($arg_name != 'req') {
 					throw new \Exception('['.$arg_name.'] parameter has no default value.');
 				}
 			}
-			$get = array_merge($params, $extend); //get参数
-			$bind['req'] = array_merge($get, Request::post()); //绑定参数
+			$get = array_merge($params, $extend); //get参数	
+			$req = array_merge($get, $post); //绑定参数				
+			$bind['req'] = $this->filterReq($req);
 			$path = strtolower($module.'/'.$controller.'/'.$method);
 			if (!empty($get)) {
 				ksort($get);	
@@ -320,8 +328,15 @@ class Base {
 				$this->route = $path;
 			}
 			Middleware::web('controller_start', $path); //记录路由信息
-			$this->exeMiddleware($class); //处理控制器中间件
-			return $class_method->invokeArgs($class, $bind);
+			$this->exeMiddleware($class); //处理控制器中间件			
+			if (method_exists($class, '_before')) {
+				$class->_before($method); //调用前置方法
+			} 		
+			$res = $class_method->invokeArgs($class, $bind);
+			if (method_exists($class, '_after')) {
+				$class->_after($method); //调用后置方法
+			} 
+			return $res;
 		} catch (\ReflectionException $e) {
 			if (!method_exists($class, '__call')) {
 				throw new \Exception($e->getMessage());
@@ -330,6 +345,32 @@ class Base {
 			return $action->invokeArgs($class, [$action, '']);
 		}
 	}	
+	/**
+	 * 处理绑定参数req
+	 * @param array $req
+	 * @return array
+	 */
+	protected function filterReq($req = []) {
+		array_walk_recursive($req, 'self::parseParam');		
+		return $req;
+	}	
+	/**
+	 * 处理参数
+	 * @param string $value
+	 * @param string $key
+	 */	
+	protected static function parseParam(&$value, $key) {
+		$filters = Config::get('route.filter_req');		
+		$html = Config::get('route._html', 'content');		
+		if (strpos($key, $html) !== false && isset($filters['_']) && function_exists($filters['_'])) {
+			$value = $filters['_']($value);
+		} elseif (isset($filters['*']) && function_exists($filters['*'])) {
+			$value = $filters['*']($value);
+		}	
+		if (!in_array($key, ['*','_']) && isset($filters[$key]) && function_exists($filters[$key])) {				
+			$value = $filters[$key]($value);			
+		}
+	}
 	/**
 	 * 处理控制器中间件
 	 * @param string $controller
@@ -355,7 +396,7 @@ class Base {
 		}
 	}
 	/**
-	 * 生成url @index/index
+	 * 生成url @home 前边加@不经路由直接显示 index 自动转换为 当前控制器/index
 	 * @param string $route 路由
 	 * @param array $params 参数
 	 * @param string $suffix url后缀
@@ -368,11 +409,17 @@ class Base {
 		if ($route == '[back]' || $route == 'javascript:history.back(-1);') {
 			return 'javascript:history.back(-1);';
 		}
+		if ($route == '[history]') {
+			return Request::history();
+		}		
 		if (filter_var($route, FILTER_VALIDATE_URL) !== false) {
 			return $route;
 		}		
+		if (preg_match('#^[a-zA-Z0-9\-_]+$#i', $route)) {			
+			$route = $this->controller.'/'.$route; //index 自动转换为 当前控制器/index
+		}
 		if (in_array($route, ['','@','@/','/@'])) {
-			$route = '/'; 
+			$route = '/';
 		}
 		if ($suffix == '*') $suffix = Config::get('route.url_suffix', '.html');
 		$temp = [];
