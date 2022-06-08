@@ -1,119 +1,105 @@
-# 路由处理
+##路由处理
+
 route组件用于处理php框架路由
 
-#开始使用
+###安装组件
 
-####安装组件
-
-使用 composer 命令进行安装或下载源代码使用。
+使用 composer命令进行安装或下载源代码使用。
 
     composer require willphp/route
 
-> WillPHP 框架已经内置此组件，无需再安装。
+> WillPHP框架已经内置此组件，无需再安装。
 
-####使用示例
+###必须常量
 
-    $res = \willphp\route\Route::bootstrap()->executeControllerMethod();
+设置如下：
 
-####路由配置
+	define('ROOT_PATH', strtr(realpath(__DIR__.'/../'),'\\', '/')); //根路径
+	define('APP_NAME', 'home'); //设置应用名
+	define('IS_GET', $_SERVER['REQUEST_METHOD'] == 'GET'); //是否get提交
+	define('__URL__', trim('http://'.$_SERVER['HTTP_HOST'].dirname($_SERVER['SCRIPT_NAME']), '/\\')); //url路径	
+
+###路由配置
 
 `config/route.php`配置文件可设置：
 	
-	'default_controller' => 'index',
-	'default_method' => 'index',	
-	'url_suffix' => '.html',
-	'del_suffix' => [], //路由自动去除后缀列表
-	'deny_app_list' => ['common'], //路由禁止访问应用app/common
-	'app_dir' => WIPHP_URI.'/app', //应用目录
+	'default_controller' => 'index', //默认控制器
+	'default_action' => 'index', //默认方法
+	'url_suffix' => '.html', //url函数自动添加后缀
+	'clear_suffix' => ['.php'], //路由解析自动清除后缀列表
 	'pathinfo_var' => 's', //pathinfo的$_GET变量
-	'route_path' => WIPHP_URI.'/route', //路由配置路径	
+	'get_validate' => '#^[a-zA-Z0-9\x7f-\xff\%\/\.\-_]+$#i', //路由$_GET变量验证正则
 	//过滤处理
-	'_html' => 'content', //包含content的表单字段
+	'_html' => 'content', //可写入html的字段(包含content的表单字段)
+	//过滤$req
 	'filter_req' => [
-		'_' => 'remove_xss', //_html处理
-		'*' => 'clear_html', //其他所有字段处理
-		'id' => 'intval',
-		'p' => 'intval',
+			'_' => 'remove_xss', //html字段处理
+			'*' => 'clear_html', //其他所有字段处理
+			'id' => 'intval',
+			'p' => 'intval',
+			//'pwd' => 'md5', //自动md5
 	],
 
-####路由设置
+###路由设置
 
-先设置应用名称：
+路由规则在 route/应用名.php 中设置，如：
 
-	define('APP_NAME', 'home');
+    return [
+        'index' => 'index/index',
+        'index_p(:num)' => 'index/index/p/${1}',
+    ];  
 
-应用的路由设置文件为：route/home.php：
+格式：
 
-	'index' => 'index/index',
-	'index_(:page)' => 'index/index/p/${1}',
-	'login' => 'index/login',
-	'app' => 'index/index/bid/3',
-	'app(:num)_p(:page)' => 'index/index/cid/${1}/p/${2}',	
+    路由(表达式)'  => '控制器/方法/[参数/匹配值]'  
 
-规则说明：
+匹配值第一个使用 ${1} 第二个使用 ${2} ...
 
-	':num' => '[0-9\-]+', //正数
-	':float' => '[0-9\.\-]+', //浮点数
-	':string' => '[a-zA-Z0-9\-_]+', //字母，数字，-_
-	':alpha' => '[a-zA-Z\x7f-\xff0-9-_]+', //可包含中文字符
-	':any' => '.*', //任意
-	':page' => '[0-9]+', //分页码
+表达式正则：
 
-控制器文件示例：app/home/controller/IndexController.php：
+    (:num)      整数
+    (:float)    浮点数
+    (:page)     正数
+    (:string)   大小写字母数字-_
+    (:alpha)    大小写字母数字-_汉字
+    (:any)      以上任意    
 
-	namespace app\home\controller;
-	class IndexController {			
-		 protected $middleware = [
-			'auth', //所有方法执行auth中间件
-			'test' => [ 'except' => ['login'] ], //login之外的方法执行test中间件
-		 ];
-		 public function index() { 
-			return 'index';
-		 }
-		 public function login() { 
-			return 'login';
-		 }
-		public function test($id=0) {
-			return 'test-'.$id;
-		}
+###URL生成
+
+助手函数(已去除内置，请自行设置此函数)：
+
+	/**
+	 * 生成url
+	 * @param string $route @：不过路由直接生成；/：根目录
+	 * @param array $param 参数['id'=>1]
+	 * @param string $suffix 后缀*:为系统默认后缀.html
+	 * @return string 返回生成url
+	 */
+	function url($route = '', $param = [], $suffix = '*') {
+		return \willphp\route\Route::buildUrl($route, $param, $suffix);
 	}
 
-路由url形式(开启url重写可去除index.php)：
 
-	pathinfo: index.php/应用/控制器/方法/参数/值
-	get: index.php?s=应用/控制器/方法&参数=值
+url函数会根据当前应用路由设置生成对应url链接。格式如下：
 
-####当前控制器
+    url('控制器/方法', [参数], [后缀名]);     
 
-	$controller = Route::getController(); //获取当前控制器
+示例:
 
-####当前操作
-
-	$action = Route::getAction(); //获取当前控制器方法
-
-####当前路由
-
-	$path = Route::getRoute(); //获取当前路由路径+get参数
-
-####执行方法
-
-	$res = Route::executeControllerMethod('index/test', ['id'=>1]);  //执行控制器方法
-
-####生成url
-
-	$url = Route::buildUrl('index/login');  //生成login.html
-
-####路由url
-
-	echo Route::pageUrl('p=1&cid=2'); //生成当前方法加参数的url  
-
-#助手函数
-
-####执行方法
-
-	$res = action('index/test', ['id'=>3]);
-
-####生成url
-
-	$url = url('index/test', ['id'=>5]);
-
+    namespace app\home\controller;
+    class Index{    
+        public function index() {
+            //经路由输出
+            echo url('index/index').'<br>'; //index.html 
+            //前边加@不经路由
+            echo url('@index/index').'<br>'; //index/index.html 
+            //不设置控制器，默认当前控制器
+            echo url('test').'<br>'; //index/test.html 
+            //test/index
+            echo url('test/index').'<br>'; //test/index.html 
+            //index/index/p/1 
+            echo url('index?p=1').'<br>'; //index_p1.html   
+            //index/index/p/2
+            echo url('index', ['p'=>2], '.php'); //index_p2.php      
+        }
+    }

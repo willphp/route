@@ -8,26 +8,23 @@
     "路由"
   ],
   "homepage": "http://www.113344.com/",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "authors": [
     {
-      "name": "no-mind",
+      "name": "无念",
       "email": "24203741@qq.com"
     }
   ],
   "minimum-stability": "stable",
   "require": {
     "php": ">=5.6.0",
-    "willphp/config": "~1.0",
-    "willphp/cache": "~1.0",
-    "willphp/request": "~1.0",
-    "willphp/middleware": "~1.0",
-    "willphp/container": "~1.0"
+    "willphp/config": "~1.1",
+    "willphp/cache": "~1.1",
+    "willphp/request": "~1.1",
+    "willphp/middleware": "~1.1",
+    "willphp/container": "~1.1"
   },
   "autoload": {
-    "files": [
-      "src/helper.php"
-    ],
     "psr-4": {
       "willphp\\route\\": "src"
     }
